@@ -20,6 +20,7 @@ function toast(message) { const node = $('#toast'); node.textContent = message; 
 function view(name) {
   $('#desk-view').classList.remove('binding-sheet-away');
   state.view = name;
+  document.body.classList.toggle('reading-active', name === 'reading');
   for (const section of document.querySelectorAll('.view')) section.classList.toggle('active', section.id === `${name}-view`);
   $('#write-button').classList.toggle('hidden',name==='desk');
   $('#decrypt-button').classList.toggle('hidden',name!=='reading');
@@ -298,8 +299,7 @@ async function start() {
     try {
       if (await hasPassword()) await unlock($('#password').value); else await createPassword($('#password').value);
       await loadDocuments(); auth.classList.add('hidden'); $('#password').value = ''; resetIdle();
-      if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
-    } catch(error) { lock(); $('#auth-error').textContent = error.message; }
+    } catch(error) { lock(); state.documents=[]; state.labels={}; $('#auth-error').textContent = error.message; }
     finally { $('#auth-submit').disabled = false; }
   };
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(error => console.warn('Offline unavailable', error));

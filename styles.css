@@ -105,6 +105,7 @@ main{position:relative;z-index:2;pointer-events:none}main button,main input,main
 #read-paper .paper-number{top:1%;right:3%}
 .drawer-name-overlay{position:fixed;z-index:4;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;min-height:20px;max-height:40px;padding:0 2px;border:0;background:transparent;color:#24150b;font-family:Georgia,'Times New Roman',serif;font-weight:700;line-height:1.02;text-align:center;text-shadow:0 1px 0 #f5e3bc;overflow:hidden;overflow-wrap:anywhere;cursor:pointer}
 .drawer-name-overlay[hidden]{display:none}
+.reading-active .drawer-name-overlay{display:none!important}
 @media(max-width:600px){#write-button{position:fixed;left:50%;right:auto;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:12;min-height:52px;white-space:nowrap;justify-content:center}}
 #decrypt-button{right:calc(clamp(20px,3vw,48px) + 166px);background:#4c3424;font-size:13px;padding:13px 14px}
 #decrypt-button,#write-button{z-index:20}

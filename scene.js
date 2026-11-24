@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from './vendor/three.module.js';
 import { RoundedBoxGeometry } from './vendor/RoundedBoxGeometry.js';
 import { nearbyPages, romanPage } from './pages.js';
 
@@ -32,7 +32,7 @@ let onSheet = () => {};
 let openDrawerId = null;
 let targetPosition = camera.position.clone();
 let targetLook = new THREE.Vector3(.35, 1.85, 0);
-let basePosition=targetPosition.clone(),baseLook=targetLook.clone(),viewZoom=1,viewYaw=0,gestureMoved=false,dragDocument=null;
+let basePosition=targetPosition.clone(),baseLook=targetLook.clone(),viewZoom=1,viewYaw=0,viewPitch=0,gestureMoved=false,dragDocument=null;
 const pointers=new Map();let pointerStart=null,pinchDistance=0;
 let currentLook = targetLook.clone();
 let animate = true;
@@ -45,9 +45,10 @@ let paperFolded=false,foldGroup=null,foldTop=null,foldTarget=0;
 let deskFolderTarget=0,deskFolderOpen=false;
 let bundlePageCount=1,cordInFlight=false,cordWrapProgress=1;
 let deskZoom=1;
+let lastMobileLayout=innerWidth<650;
 const cordRestPosition=()=>new THREE.Vector3(innerWidth<650?-1.05:-3.35,.465,innerWidth<650?2.62:1.45);
-function updateViewTarget(){const offset=basePosition.clone().sub(baseLook);const orbit=new THREE.Spherical().setFromVector3(offset);orbit.theta+=viewYaw;orbit.radius*=viewZoom;targetLook.copy(baseLook);targetPosition.copy(baseLook).add(new THREE.Vector3().setFromSpherical(orbit));}
-function setBaseView(position,look){basePosition.copy(position);baseLook.copy(look);viewZoom=1;viewYaw=0;updateViewTarget();}
+function updateViewTarget(){const offset=basePosition.clone().sub(baseLook);const orbit=new THREE.Spherical().setFromVector3(offset);orbit.theta+=viewYaw;orbit.phi=THREE.MathUtils.clamp(orbit.phi+viewPitch,.22,Math.PI-.22);orbit.radius*=viewZoom;targetLook.copy(baseLook);targetPosition.copy(baseLook).add(new THREE.Vector3().setFromSpherical(orbit));}
+function setBaseView(position,look){basePosition.copy(position);baseLook.copy(look);viewZoom=1;viewYaw=0;viewPitch=0;updateViewTarget();}
 function slideDrawer(id){openDrawerId=id;const now=performance.now();for(const [drawerId,drawer] of drawers){drawer.userData.slide={from:drawer.position.z,to:drawerId===id?2.15:0,start:now};}}
 
 function grainTexture(base, accent, seed = 1) {
@@ -285,11 +286,11 @@ export function initScene(callback, sheetCallback) {
   canvas.addEventListener('pointerdown',event=>{if(desk.visible)return;canvas.setPointerCapture(event.pointerId);pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});pointerStart={x:event.clientX,y:event.clientY};gestureMoved=false;if(pointers.size===1&&openDrawerId)dragDocument=folderAt(event)||null;if(pointers.size===2){dragDocument=null;const [a,b]=[...pointers.values()];pinchDistance=Math.hypot(a.x-b.x,a.y-b.y);}});
   canvas.addEventListener('pointermove',event=>{if(!pointers.has(event.pointerId)||desk.visible)return;const last=pointers.get(event.pointerId);const dx=event.clientX-last.x,dy=event.clientY-last.y;pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});if(Math.hypot(event.clientX-pointerStart.x,event.clientY-pointerStart.y)>7)gestureMoved=true;
     if(dragDocument){if(gestureMoved){ghost.classList.add('visible');moveGhost(event);}return;}
-    if(pointers.size===2){const [a,b]=[...pointers.values()];const next=Math.hypot(a.x-b.x,a.y-b.y);if(pinchDistance>0){viewZoom=THREE.MathUtils.clamp(viewZoom*pinchDistance/next,.25,1.9);updateViewTarget();}pinchDistance=next;gestureMoved=true;}
-    else if(gestureMoved){viewZoom=THREE.MathUtils.clamp(viewZoom*Math.exp(dy*.0025),.25,1.9);viewYaw=THREE.MathUtils.clamp(viewYaw-dx*.0018,-.34,.34);updateViewTarget();}
+    if(pointers.size===2){const [a,b]=[...pointers.values()];const next=Math.hypot(a.x-b.x,a.y-b.y);if(pinchDistance>0){viewZoom=THREE.MathUtils.clamp(viewZoom*pinchDistance/next,.42,2.6);updateViewTarget();}pinchDistance=next;gestureMoved=true;}
+    else if(gestureMoved){viewYaw=THREE.MathUtils.clamp(viewYaw-dx*.0022,-.38,.38);viewPitch=THREE.MathUtils.clamp(viewPitch+dy*.0014,-.18,.18);updateViewTarget();}
   });
   const release=event=>{if(dragDocument&&gestureMoved&&event.type==='pointerup'){const r=document.querySelector('#write-button').getBoundingClientRect();if(event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom)onCompartment(dragDocument.compartment,'edit-folder',dragDocument.documentId);}dragDocument=null;ghost.classList.remove('visible');document.querySelector('#write-button').classList.remove('drop-target');pointers.delete(event.pointerId);if(pointers.size<2)pinchDistance=0;};canvas.addEventListener('pointerup',release);canvas.addEventListener('pointercancel',release);
-  canvas.addEventListener('wheel',event=>{event.preventDefault();if(desk.visible)return;viewZoom=THREE.MathUtils.clamp(viewZoom*Math.exp(event.deltaY*.001),.25,1.9);updateViewTarget();},{passive:false});
+  canvas.addEventListener('wheel',event=>{event.preventDefault();if(desk.visible)return;viewZoom=THREE.MathUtils.clamp(viewZoom*Math.exp(event.deltaY*.001),.42,2.6);updateViewTarget();},{passive:false});
   canvas.addEventListener('click', event => {
     if(gestureMoved){gestureMoved=false;return;}
     if (desk.visible) {
@@ -318,7 +319,9 @@ function resize() {
   const width = innerWidth, height = innerHeight;
   renderer.setSize(width, height, false);
   camera.aspect = width / height; camera.updateProjectionMatrix();
-  if(desk.visible)showDesk();
+  const mobile=width<650;
+  if(desk.visible&&mobile!==lastMobileLayout)showDesk();
+  lastMobileLayout=mobile;
 }
 
 function render(now) {
@@ -362,7 +365,7 @@ function updateDrawerNames(){
   }
 }
 
-export function showCabinet() { desk.visible = false; cabinet.visible = true; camera.zoom=1;camera.updateProjectionMatrix();slideDrawer(null);setBaseView(new THREE.Vector3(.2, 2.2, innerWidth < 650 ? 17 : 9.6),new THREE.Vector3(.5, 2.1, -1.3)); }
+export function showCabinet() { desk.visible = false; cabinet.visible = true; camera.zoom=1;camera.updateProjectionMatrix();slideDrawer(null);setBaseView(new THREE.Vector3(.6, 2.2, innerWidth < 650 ? 23 : 9.6),new THREE.Vector3(.6, 2.1, -1.3)); }
 export function focusCompartment(id) { const c = compartments.find(item => item.id === id); if (!c) return; desk.visible = false; cabinet.visible = true;camera.zoom=1;camera.updateProjectionMatrix(); if(openDrawerId!==id)slideDrawer(id);setBaseView(new THREE.Vector3(c.x+.35, c.y+(innerWidth < 650 ? 5.2 : 5.3), innerWidth < 650 ? 8.8 : 6.5),new THREE.Vector3(c.x, c.y-.10, -.7)); }
 export function setDrawerLabel(id,value){const drawer=drawers.get(id);if(!drawer)return;const name=value.trim();drawer.userData.nameOverlay.textContent=name;drawer.userData.nameOverlay.hidden=!name;drawer.userData.labelMesh.visible=!name;}
 export function setDrawerDocuments(id,docs){const drawer=drawers.get(id);if(!drawer)return;for(const mesh of drawer.userData.folderHits){const index=interactive.indexOf(mesh);if(index!==-1)interactive.splice(index,1);}drawer.userData.folderHits=[];drawer.userData.folderTabs=[];const stack=drawer.userData.folders;for(const child of [...stack.children])stack.remove(child);
@@ -377,7 +380,7 @@ export function setDrawerDocuments(id,docs){const drawer=drawers.get(id);if(!dra
     if(doc.title){const tag=new THREE.Mesh(new THREE.PlaneGeometry(.55,.14),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}));tag.rotation.x=-Math.PI/2;tag.position.set(0,top+.012,-.14);folder.add(tag);}
   });
 }
-export function showDesk() { const entering=!desk.visible;desk.visible = true; cabinet.visible = false;const mobile=innerWidth<650;if(entering)deskZoom=mobile?1.2:1;desk.userData.ink.position.x=mobile?1.4:3.25;desk.userData.candleGroup.position.x=mobile?2.04:0;camera.zoom=deskZoom;camera.updateProjectionMatrix();setBaseView(new THREE.Vector3(0,mobile?9.5:11,mobile?12:9),new THREE.Vector3(0,.25,1.1)); }
+export function showDesk() { const entering=!desk.visible;desk.visible = true; cabinet.visible = false;const mobile=innerWidth<650;if(entering)deskZoom=mobile?.88:1;desk.userData.ink.position.x=mobile?1.4:3.25;desk.userData.candleGroup.position.x=mobile?2.04:0;camera.zoom=deskZoom;camera.updateProjectionMatrix();setBaseView(new THREE.Vector3(0,mobile?9.5:11,mobile?12:9),new THREE.Vector3(0,.25,1.1)); }
 export function setDeskZoom(value){if(!desk.visible)return;deskZoom=THREE.MathUtils.clamp(value,.32,3.6);camera.zoom=deskZoom;camera.updateProjectionMatrix();}
 export function getDeskZoom(){return deskZoom;}
 export function getInkwellScreenPosition(){

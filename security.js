@@ -3,26 +3,45 @@ import { getMeta, setMeta } from './storage.js';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const ITERATIONS = 600000;
+const KEY_INFO = encoder.encode('historic-cabinet-content-v2');
 let activeKey = null;
 
 const random = size => crypto.getRandomValues(new Uint8Array(size));
 const toArray = bytes => Array.from(bytes);
 
 async function derive(password, salt, iterations) {
-  const base = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: new Uint8Array(salt), iterations, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  const base = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: new Uint8Array(salt), iterations, hash: 'SHA-256' }, base, 256));
+  try {
+    const legacy = await crypto.subtle.importKey('raw', bits, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+    const content = await crypto.subtle.importKey('raw', bits, { name: 'HKDF' }, false, ['deriveKey']);
+    return { legacy, content };
+  } finally { bits.fill(0); }
 }
 
-async function seal(key, value) {
+async function contentKey(keys, salt) {
+  return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt, info: KEY_INFO }, keys.content, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+async function seal(keys, value) {
+  const salt = random(16);
   const iv = random(12);
   const bytes = encoder.encode(JSON.stringify(value));
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes);
-  return { iv: toArray(iv), ciphertext: toArray(new Uint8Array(ciphertext)) };
+  try {
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await contentKey(keys, salt), bytes);
+    return { version: 2, salt: toArray(salt), iv: toArray(iv), ciphertext: toArray(new Uint8Array(ciphertext)) };
+  } finally { bytes.fill(0); }
 }
 
-async function unseal(key, envelope) {
-  const bytes = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(envelope.iv) }, key, new Uint8Array(envelope.ciphertext));
-  return JSON.parse(decoder.decode(bytes));
+async function unseal(keys, envelope) {
+  if (!Array.isArray(envelope?.iv) || envelope.iv.length !== 12 || !Array.isArray(envelope.ciphertext)) throw new Error('Invalid encrypted record');
+  const key = envelope.version === 2
+    ? (Array.isArray(envelope.salt) && envelope.salt.length === 16 ? await contentKey(keys, new Uint8Array(envelope.salt)) : null)
+    : envelope.version == null ? keys.legacy : null;
+  if (!key) throw new Error('Unsupported encrypted record');
+  const bytes = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(envelope.iv) }, key, new Uint8Array(envelope.ciphertext)));
+  try { return JSON.parse(decoder.decode(bytes)); }
+  finally { bytes.fill(0); }
 }
 
 export async function hasPassword() { return Boolean(await getMeta('vault')); }

@@ -1,6 +1,5 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,6 +16,8 @@ const headers = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
   'X-Frame-Options': 'DENY',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), bluetooth=(), usb=(), serial=(), hid=(), midi=(), payment=(), display-capture=(), accelerometer=(), gyroscope=(), magnetometer=()',
 };
 
 http.createServer(async (request, response) => {
@@ -31,10 +32,9 @@ http.createServer(async (request, response) => {
     const data = await readFile(path.join(root, ...file.split('/')));
     const nextHeaders = { ...headers, 'Content-Type': types[path.extname(file)] || 'application/octet-stream' };
     if (file === 'index.html') {
-      const importMap = data.toString('utf8').match(/<script type="importmap">([\s\S]*?)<\/script>/)?.[1];
-      const hash = importMap ? ` 'sha256-${createHash('sha256').update(importMap).digest('base64')}'` : '';
-      nextHeaders['Content-Security-Policy'] = `default-src 'none'; script-src 'self'${hash}; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`;
+      nextHeaders['Content-Security-Policy'] = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'none'; connect-src 'none'; worker-src 'self'; manifest-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
     }
+    if (file === 'sw.js') nextHeaders['Content-Security-Policy'] = "default-src 'none'; script-src 'self'; connect-src 'self'; object-src 'none'";
     response.writeHead(200, nextHeaders).end(request.method === 'HEAD' ? undefined : data);
   } catch { response.writeHead(404, headers).end(); }
 }).listen(Number(process.argv[2] || process.env.PORT || 4173), '127.0.0.1', () => console.log(`Open http://127.0.0.1:${process.argv[2] || process.env.PORT || 4173}`));

@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from './vendor/three.module.js';
 
 // This second Three.js layer keeps the real HTML caret and the modeled nib in
 // the same screen coordinate system. It does not replace the editable text.
@@ -30,10 +30,11 @@ export function getCurrentInkClass(){return `ink-${String(Math.round(200*Math.po
 function xy(x,y){return {x:x-innerWidth/2,y:innerHeight/2-y};}
 function screen(point){return {x:point.x+innerWidth/2,y:innerHeight/2-point.y};}
 function announceInk(now){if(now-lastInkNotice<150)return;lastInkNotice=now;const light=[139,137,133],dark=[18,19,20];const tone=Math.pow(inkLevel,.78);const color=`rgb(${light.map((value,i)=>Math.round(value+(dark[i]-value)*tone)).join(',')})`;onInkChange(color,inkLevel);}
-function place(){const sheet=document.querySelector('.editor-wrap')?.getBoundingClientRect();if(!sheet)return;restPoint=xy(Math.min(innerWidth-44,sheet.right+34),sheet.top+130);if(!active||mode==='rest')target={...restPoint};}
+function place(){const sheet=document.querySelector('.editor-wrap')?.getBoundingClientRect();if(!sheet)return;const scale=innerWidth<650?.78:.84;const x=THREE.MathUtils.clamp(sheet.right+24,22,innerWidth-106*scale);const y=THREE.MathUtils.clamp(sheet.top+Math.min(130,sheet.height*.32),100*scale,innerHeight-44);restPoint=xy(x,y);if(!active||mode==='rest')target={...restPoint};}
 function caret(){const selection=getSelection();if(!selection?.rangeCount||!editor.contains(selection.anchorNode))return null;const range=selection.getRangeAt(0).cloneRange();range.collapse(true);let rect=range.getClientRects()[0];if(!rect){const node=editor.getBoundingClientRect();rect={left:node.left+8,top:node.top+12,height:24};}return xy(rect.left+2,rect.top+rect.height*.72);}
 function resize(){camera.left=-innerWidth/2;camera.right=innerWidth/2;camera.top=innerHeight/2;camera.bottom=-innerHeight/2;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight,false);place();if(active&&mode==='writing'){const at=caret();if(at)target=at;}}
 function tick(now){requestAnimationFrame(tick);const dt=Math.min(50,now-last||16);last=now;if(!active)return;
+  if(mode==='rest')place();
   if(mode==='drag'&&dipStarted){inkLevel=Math.min(1,.24+.76*(1-Math.exp(-(now-dipStarted)/1400)));announceInk(now);}
   else if(mode!=='dip'&&mode!=='writing'){inkLevel=Math.max(0,inkLevel*Math.exp(-dt/95000));announceInk(now);}
   if(mode==='writing'&&now>writingUntil){mode='rest';target={...restPoint};onSound('pen_lift');}
@@ -43,7 +44,7 @@ function tick(now){requestAnimationFrame(tick);const dt=Math.min(50,now-last||16
   if(mode==='writing'&&Math.hypot(target.x-current.x,target.y-current.y)>2&&now-lastScratch>85){lastScratch=now;onSound('scratch');}
   quill.position.set(current.x,current.y+(mode==='dip'?8:mode==='rest'?4:Math.sin(now*.025)*1.2),0);
   quill.rotation.z+=((mode==='drag'?.14:mode==='writing'?-.055+Math.sin(now*.02)*.012:.04)-quill.rotation.z)*Math.min(1,dt*.01);
-  quill.scale.setScalar(innerWidth<650?.68:.84);
+  quill.scale.setScalar(innerWidth<650?.78:.84);
   renderer.render(scene,camera);
 }
 resize();requestAnimationFrame(tick);window.addEventListener('resize',resize);window.visualViewport?.addEventListener('resize',resize);window.addEventListener('scroll',()=>{place();if(mode==='writing'){const at=caret();if(at)target=at;}},{passive:true});
@@ -59,7 +60,7 @@ export function penInput(event){if(!active)return;const at=caret();if(!at)return
   lastInput=now;
 }
 export function penTouch(){if(!active)return;const at=caret();if(at){mode='writing';target=at;writingUntil=performance.now()+700;onSound('pen_touch');}}
-document.addEventListener('pointerdown',event=>{if(!active||dragId!==null)return;const point=screen(current);const feather={x:point.x+45*(innerWidth<650?.68:.84),y:point.y-68*(innerWidth<650?.68:.84)};if(Math.hypot(event.clientX-feather.x,event.clientY-feather.y)>55)return;event.preventDefault();event.stopPropagation();dragId=event.pointerId;mode='drag';target=xy(event.clientX,event.clientY);wasDipped=false;dipStarted=0;document.documentElement.style.touchAction='none';},{capture:true,passive:false});
+document.addEventListener('pointerdown',event=>{if(!active||dragId!==null)return;const point=screen(current);const feather={x:point.x+45*(innerWidth<650?.78:.84),y:point.y-68*(innerWidth<650?.78:.84)};if(Math.hypot(event.clientX-feather.x,event.clientY-feather.y)>55)return;event.preventDefault();event.stopPropagation();dragId=event.pointerId;mode='drag';target=xy(event.clientX,event.clientY);wasDipped=false;dipStarted=0;document.documentElement.style.touchAction='none';},{capture:true,passive:false});
 document.addEventListener('pointermove',event=>{if(dragId!==event.pointerId)return;event.preventDefault();target=xy(event.clientX,event.clientY);const well=getInkwell();const inWell=well&&Math.hypot(event.clientX-well.x,event.clientY-well.y)<48;if(inWell){if(!dipStarted){dipStarted=performance.now();wasDipped=true;onSound('ink_dip');}}else if(dipStarted){dipStarted=0;onSound('ink_lift');}},{passive:false});
 function endDrag(event){if(dragId!==event.pointerId)return;event.preventDefault();dragId=null;document.documentElement.style.touchAction='';if(dipStarted){dipStarted=0;onSound('ink_lift');}if(wasDipped)announceInk(performance.now()+200);mode='rest';place();onSound('pen_lift');}
 document.addEventListener('pointerup',endDrag,{passive:false});document.addEventListener('pointercancel',endDrag,{passive:false});
