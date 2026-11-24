@@ -172,7 +172,15 @@ async function createDocument() {
 }
 async function closeAndLock() {
   try { await flush(); } catch { toast('Ошибка сохранения: кабинет не заперт, повторите попытку'); return; }
-  state.current = null; state.documents = []; state.labels={}; state.shelf = null; editor.replaceChildren(); titleInput.value = ''; lock(); clearTimeout(state.idleTimer);
+  state.current = null; state.reading = null; state.documents = []; state.labels={}; state.shelf = null; state.pageIndex=0;
+  editor.replaceChildren(); titleInput.value = '';
+  for(const id of ['documents','read-content'])$( `#${id}`).replaceChildren();
+  for(const id of ['read-title','read-page-number','write-page-number','shelf-title','desk-location','label-input'])$( `#${id}`).textContent='';
+  $('#label-input').value='';
+  for(const [index,button] of [...document.querySelectorAll('#move-options button')].entries())button.textContent=`Ящик ${index+1}`;
+  for(const comp of compartments){setDrawerLabel(comp.id,'');setDrawerDocuments(comp.id,[]);}
+  document.querySelectorAll('dialog[open]').forEach(dialog=>dialog.close('cancel'));
+  lock(); clearTimeout(state.idleTimer);
   view('cabinet'); $('#password').value = ''; $('#auth-screen').classList.remove('hidden'); $('#auth-title').textContent = 'Откройте кабинет'; $('#auth-explainer').textContent = 'Введите пароль, чтобы открыть свои рукописи.'; $('#auth-error').textContent = '';
 }
 

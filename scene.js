@@ -196,7 +196,8 @@ function buildCabinet() {
     const labelTexture=new THREE.CanvasTexture(labelCanvas);labelTexture.colorSpace=THREE.SRGBColorSpace;
     const label=new THREE.Mesh(new THREE.PlaneGeometry(.74,.21),new THREE.MeshBasicMaterial({map:labelTexture,transparent:true,depthWrite:false}));label.position.set(0,.19,-.123);label.userData.label=comp.id;drawer.add(label);interactive.push(label);
     const labelTarget=new THREE.Mesh(new THREE.PlaneGeometry(.85,.29),new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));labelTarget.position.set(0,.19,-.115);labelTarget.userData.label=comp.id;drawer.add(labelTarget);interactive.push(labelTarget);
-    drawer.userData.labelCanvas=labelCanvas;drawer.userData.labelTexture=labelTexture;
+    const nameOverlay=document.createElement('button');nameOverlay.type='button';nameOverlay.className='drawer-name-overlay';nameOverlay.hidden=true;nameOverlay.setAttribute('aria-label','Изменить подпись ящика');nameOverlay.addEventListener('click',()=>onCompartment(comp.id,'label'));document.body.append(nameOverlay);
+    drawer.userData.labelCanvas=labelCanvas;drawer.userData.labelTexture=labelTexture;drawer.userData.labelMesh=label;drawer.userData.nameOverlay=nameOverlay;
     for(const dx of [-.33,.33]) sphere(drawer,.018,dx,.17,-.126,brass);
     sphere(drawer,.065,0,-.19,-.17,agedBrass);
     const ring=new THREE.Mesh(new THREE.TorusGeometry(.105,.022,8,18),brass);ring.position.set(0,-.26,-.11);ring.rotation.x=.28;ring.castShadow=true;drawer.add(ring);
@@ -338,12 +339,32 @@ function render(now) {
   if(desk.userData.seal&&stampActive){stampProgress=Math.min(1,stampProgress+.025);const t=stampProgress;const travel=t<.38?t/.38:t<.7?1:Math.max(0,1-(t-.7)/.3);const lift=t<.38?Math.sin(t/.38*Math.PI/2)*.55:t<.55?Math.max(0,(.55-t)/.17)*.55:t<.7?0:Math.sin((t-.7)/.3*Math.PI)*.42;desk.userData.seal.position.set(3.66+(.17-3.66)*travel,.68+lift,2.35+(1.83-2.35)*travel);if(t>=.55&&!stampContact){stampContact=true;stampResolve?.();stampResolve=null;}if(t>=1){stampActive=false;desk.userData.seal.position.set(3.66,.68,2.35);}}
   if(desk.userData.flame)desk.userData.flame.scale.y=1.8+Math.sin(now*.016)*.12;
   camera.lookAt(currentLook);
+  updateDrawerNames();
   renderer.render(scene, camera);
+}
+
+function updateDrawerNames(){
+  if(!cabinet.visible){for(const drawer of drawers.values())drawer.userData.nameOverlay.hidden=true;return;}
+  camera.updateMatrixWorld();cabinet.updateMatrixWorld(true);
+  for(const drawer of drawers.values()){
+    const overlay=drawer.userData.nameOverlay;
+    if(!overlay.textContent){overlay.hidden=true;continue;}
+    const center=new THREE.Vector3(0,.19,-.12).applyMatrix4(drawer.matrixWorld).project(camera);
+    const left=new THREE.Vector3(-.41,.19,-.12).applyMatrix4(drawer.matrixWorld).project(camera);
+    const right=new THREE.Vector3(.41,.19,-.12).applyMatrix4(drawer.matrixWorld).project(camera);
+    const width=Math.abs(right.x-left.x)*innerWidth/2;
+    const x=(center.x+1)*innerWidth/2,y=(1-center.y)*innerHeight/2;
+    overlay.hidden=center.z<=-1||center.z>=1||x<-width||x>innerWidth+width||y<0||y>innerHeight;
+    if(overlay.hidden)continue;
+    overlay.style.left=`${x}px`;overlay.style.top=`${y}px`;
+    overlay.style.width=`${Math.max(42,width)}px`;
+    overlay.style.fontSize=`${Math.min(17,Math.max(11,width*.13))}px`;
+  }
 }
 
 export function showCabinet() { desk.visible = false; cabinet.visible = true; camera.zoom=1;camera.updateProjectionMatrix();slideDrawer(null);setBaseView(new THREE.Vector3(.2, 2.2, innerWidth < 650 ? 17 : 9.6),new THREE.Vector3(.5, 2.1, -1.3)); }
 export function focusCompartment(id) { const c = compartments.find(item => item.id === id); if (!c) return; desk.visible = false; cabinet.visible = true;camera.zoom=1;camera.updateProjectionMatrix(); if(openDrawerId!==id)slideDrawer(id);setBaseView(new THREE.Vector3(c.x+.35, c.y+(innerWidth < 650 ? 5.2 : 5.3), innerWidth < 650 ? 8.8 : 6.5),new THREE.Vector3(c.x, c.y-.10, -.7)); }
-export function setDrawerLabel(id,value){const drawer=drawers.get(id);if(!drawer)return;const {labelCanvas:canvas,labelTexture:texture}=drawer.userData;const context=canvas.getContext('2d');context.clearRect(0,0,canvas.width,canvas.height);const words=value.trim().split(/\s+/).filter(Boolean);let lines=[value];if(words.length>1&&value.length>10){let best=1;for(let i=2;i<words.length;i++)if(Math.abs(words.slice(0,i).join(' ').length-words.slice(i).join(' ').length)<Math.abs(words.slice(0,best).join(' ').length-words.slice(best).join(' ').length))best=i;lines=[words.slice(0,best).join(' '),words.slice(best).join(' ')];}context.fillStyle='#20140d';context.font='bold 72px Georgia';context.textAlign='center';context.textBaseline='middle';for(let i=0;i<lines.length;i++)context.fillText(lines[i],256,lines.length===1?82:48+i*68,474);texture.needsUpdate=true;}
+export function setDrawerLabel(id,value){const drawer=drawers.get(id);if(!drawer)return;const name=value.trim();drawer.userData.nameOverlay.textContent=name;drawer.userData.nameOverlay.hidden=!name;drawer.userData.labelMesh.visible=!name;}
 export function setDrawerDocuments(id,docs){const drawer=drawers.get(id);if(!drawer)return;for(const mesh of drawer.userData.folderHits){const index=interactive.indexOf(mesh);if(index!==-1)interactive.splice(index,1);}drawer.userData.folderHits=[];drawer.userData.folderTabs=[];const stack=drawer.userData.folders;for(const child of [...stack.children])stack.remove(child);
   docs.slice(0,8).forEach((doc,i)=>{const folder=new THREE.Group();folder.position.set((i%2?-.025:.025),.13+i*.008,-2.12+i*.202);stack.add(folder);
     const pageCount=doc.pages?.length||1;const thickness=.012+Math.min(.13,Math.max(0,pageCount-1)*.00068);
