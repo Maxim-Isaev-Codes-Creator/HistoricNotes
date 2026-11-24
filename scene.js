@@ -46,6 +46,7 @@ let deskFolderTarget=0,deskFolderOpen=false;
 let bundlePageCount=1,cordInFlight=false,cordWrapProgress=1;
 let deskZoom=1;
 let lastMobileLayout=innerWidth<650;
+let fullViewportWidth=innerWidth,fullViewportHeight=innerHeight;
 const cordRestPosition=()=>new THREE.Vector3(innerWidth<650?-1.05:-3.35,.465,innerWidth<650?2.62:1.45);
 function updateViewTarget(){const offset=basePosition.clone().sub(baseLook);const orbit=new THREE.Spherical().setFromVector3(offset);orbit.theta+=viewYaw;orbit.phi=THREE.MathUtils.clamp(orbit.phi+viewPitch,.22,Math.PI-.22);orbit.radius*=viewZoom;targetLook.copy(baseLook);targetPosition.copy(baseLook).add(new THREE.Vector3().setFromSpherical(orbit));}
 function setBaseView(position,look){basePosition.copy(position);baseLook.copy(look);viewZoom=1;viewYaw=0;viewPitch=0;updateViewTarget();}
@@ -312,13 +313,20 @@ export function initScene(callback, sheetCallback) {
     else if (hit?.object.userData.label) onCompartment(hit.object.userData.label,'label');
     else if (hit?.object.userData.compartment) onCompartment(hit.object.userData.compartment,'drawer');
   });
-  resize(); window.addEventListener('resize', resize); requestAnimationFrame(render);
+  resize(); window.addEventListener('resize', resize);window.visualViewport?.addEventListener('resize',resize); requestAnimationFrame(render);
 }
 
 function resize() {
   const width = innerWidth, height = innerHeight;
-  renderer.setSize(width, height, false);
-  camera.aspect = width / height; camera.updateProjectionMatrix();
+  const focused=document.activeElement?.matches?.('#editor,#document-title');
+  const visibleHeight=window.visualViewport?.height||height;
+  const keyboardOpen=desk.visible&&width<650&&focused&&width===fullViewportWidth&&
+    (height<fullViewportHeight-20||visibleHeight<fullViewportHeight-20);
+  if(!keyboardOpen&&(!focused||width!==fullViewportWidth||height>fullViewportHeight)){fullViewportWidth=width;fullViewportHeight=height;}
+  const renderHeight=keyboardOpen?fullViewportHeight:height;
+  renderer.setSize(width,renderHeight,false);
+  canvas.style.height=`${renderHeight}px`;
+  camera.aspect = width / renderHeight; camera.updateProjectionMatrix();
   const mobile=width<650;
   if(desk.visible&&mobile!==lastMobileLayout)showDesk();
   lastMobileLayout=mobile;
@@ -328,7 +336,7 @@ function render(now) {
   requestAnimationFrame(render);
   if (now - lastFrame < (desk.visible ? 32 : 16)) return;
   lastFrame = now;
-  if (animate) { camera.position.lerp(targetPosition, speed); currentLook.lerp(targetLook, speed); }
+  if (animate) { const cameraSpeed=desk.visible?Math.max(speed,.18):speed;camera.position.lerp(targetPosition,cameraSpeed); currentLook.lerp(targetLook,cameraSpeed); }
   else { camera.position.copy(targetPosition); currentLook.copy(targetLook); }
   for(const [id,drawer] of drawers) { const slide=drawer.userData.slide;if(!slide)continue;const t=animate?THREE.MathUtils.clamp((now-slide.start)/slideDuration,0,1):1;const eased=t*t*(3-2*t);drawer.position.z=THREE.MathUtils.lerp(slide.from,slide.to,eased);if(t===1)drawer.userData.slide=null; }
   if(desk.userData.inkLid)desk.userData.inkLid.rotation.x=THREE.MathUtils.lerp(desk.userData.inkLid.rotation.x,inkOpen?-1.85:0,.12);
@@ -365,7 +373,7 @@ function updateDrawerNames(){
   }
 }
 
-export function showCabinet() { desk.visible = false; cabinet.visible = true; camera.zoom=1;camera.updateProjectionMatrix();slideDrawer(null);setBaseView(new THREE.Vector3(.6, 2.2, innerWidth < 650 ? 23 : 9.6),new THREE.Vector3(.6, 2.1, -1.3)); }
+export function showCabinet() { desk.visible = false; cabinet.visible = true; camera.zoom=1;camera.updateProjectionMatrix();slideDrawer(null);setBaseView(new THREE.Vector3(.6, 2.2, innerWidth < 650 ? 23 : 9.6),new THREE.Vector3(.6, 2.1, -1.3));resize(); }
 export function focusCompartment(id) { const c = compartments.find(item => item.id === id); if (!c) return; desk.visible = false; cabinet.visible = true;camera.zoom=1;camera.updateProjectionMatrix(); if(openDrawerId!==id)slideDrawer(id);setBaseView(new THREE.Vector3(c.x+.35, c.y+(innerWidth < 650 ? 5.2 : 5.3), innerWidth < 650 ? 8.8 : 6.5),new THREE.Vector3(c.x, c.y-.10, -.7)); }
 export function setDrawerLabel(id,value){const drawer=drawers.get(id);if(!drawer)return;const name=value.trim();drawer.userData.nameOverlay.textContent=name;drawer.userData.nameOverlay.hidden=!name;drawer.userData.labelMesh.visible=!name;}
 export function setDrawerDocuments(id,docs){const drawer=drawers.get(id);if(!drawer)return;for(const mesh of drawer.userData.folderHits){const index=interactive.indexOf(mesh);if(index!==-1)interactive.splice(index,1);}drawer.userData.folderHits=[];drawer.userData.folderTabs=[];const stack=drawer.userData.folders;for(const child of [...stack.children])stack.remove(child);
@@ -405,7 +413,7 @@ export function getDeskPaperScreenBounds(){
   const xs=points.map(p=>p.x),ys=points.map(p=>p.y);return {x:(Math.min(...xs)+Math.max(...xs))/2,y:(Math.min(...ys)+Math.max(...ys))/2,width:Math.max(...xs)-Math.min(...xs),height:Math.max(...ys)-Math.min(...ys)};
 }
 export function applySceneSettings(settings) {
-  const ratio = settings.quality === 'high' ? Math.min(devicePixelRatio, 2) : settings.quality === 'medium' ? Math.min(devicePixelRatio, 1.5) : 1;
+  const ratio = settings.quality === 'high' ? Math.min(devicePixelRatio, 2.5) : settings.quality === 'medium' ? Math.min(devicePixelRatio, 2) : 1;
   renderer.setPixelRatio(ratio); resize();
   renderer.shadowMap.enabled = settings.shadows;
   lights.key.castShadow = settings.shadows;
