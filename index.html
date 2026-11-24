@@ -8,6 +8,7 @@
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./ink.css">
   <title>Письменный кабинет</title>
   <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
   <script type="module" src="./app.js"></script>
@@ -31,17 +32,18 @@
     </section>
     <section id="reading-view" class="view" aria-label="Чтение бумаг">
       <button id="back-from-reading" class="text-button">← К ящику</button>
-      <article id="read-paper"><h2 id="read-title"></h2><div id="read-content"></div><nav id="read-pages"><button id="read-previous" type="button" aria-label="Предыдущий лист">←</button><button id="read-next" type="button" aria-label="Следующий лист">→</button></nav></article><div class="reading-hand left" aria-hidden="true"><span></span></div><div class="reading-hand right" aria-hidden="true"><span></span></div>
+      <article id="read-paper"><span id="read-page-number" class="paper-number" aria-hidden="true"></span><h2 id="read-title"></h2><div id="read-content"></div><button id="read-left-edge" class="read-edge" type="button" aria-label="Предыдущий лист"></button><button id="read-right-edge" class="read-edge" type="button" aria-label="Следующий лист"></button><nav id="read-pages"><button id="read-previous" type="button" aria-label="Предыдущий лист">←</button><button id="read-next" type="button" aria-label="Следующий лист">→</button></nav></article><div class="reading-hand left" aria-hidden="true"><i class="finger thumb"></i><i class="finger index"></i><i class="finger middle"></i><i class="finger ring"></i><i class="finger little"></i><span class="sleeve"></span></div><div class="reading-hand right" aria-hidden="true"><i class="finger thumb"></i><i class="finger index"></i><i class="finger middle"></i><i class="finger ring"></i><i class="finger little"></i><span class="sleeve"></span></div>
     </section>
     <section id="desk-view" class="view" aria-label="Письменный стол">
       <div class="desk-topbar"><button id="back-to-shelf" class="text-button">← Вернуться к шкафу</button><span id="desk-location"></span><button id="document-menu-button" class="text-button">⋯</button></div>
-      <button id="folder-open-hit" type="button" aria-label="Открыть папку"></button>
+      <button id="folder-open-hit" type="button" aria-label="Открыть связку"></button>
+      <button id="bind-hit" type="button" aria-label="Закончить и связать бумаги"></button>
       <div class="desk-actions"><button id="ink-action" type="button" title="Открыть или закрыть чернильницу" aria-label="Чернильница">◉</button><button id="fold-action" type="button" title="Сложить или развернуть бумаги" aria-label="Сложить бумаги">▱</button><button id="wax-action" type="button" title="Поставить сургучную печать" aria-label="Поставить печать">●</button></div>
-      <div class="editor-wrap"><div class="paper-top"><input id="document-title" aria-label="Название бумаги" maxlength="120"></div><div id="editor" contenteditable="true" role="textbox" aria-label="Текст бумаги" aria-multiline="true" data-placeholder="" spellcheck="true"></div></div>
-        <div id="sheet-tabs" aria-label="Листы в папке"></div>
+      <div class="editor-wrap"><span id="write-page-number" class="paper-number" aria-hidden="true"></span><div class="paper-top"><input id="document-title" aria-label="Название бумаги" maxlength="120"></div><div id="editor" contenteditable="true" role="textbox" aria-label="Текст бумаги" aria-multiline="true" data-placeholder="" spellcheck="true"></div></div>
       <div id="format-bar" class="format-bar" aria-label="Работа с бумагой"><button id="find-button" title="Найти в бумаге" aria-label="Найти">⌕</button><button id="undo-button" title="Отменить" aria-label="Отменить">↶</button><button id="redo-button" title="Повторить" aria-label="Повторить">↷</button></div>
       <div id="find-panel" class="find-panel hidden"><input id="find-input" placeholder="Найти в тексте" aria-label="Найти в тексте"><span id="find-count"></span><button id="find-prev" aria-label="Предыдущее">↑</button><button id="find-next" aria-label="Следующее">↓</button><button id="find-close" aria-label="Закрыть поиск">×</button></div>
     </section>
+    <button id="decrypt-button" class="write-button hidden" type="button" aria-label="Сохранить текст связки в буфер обмена">Сохранить</button>
     <button id="write-button" class="write-button">✎ <span>Написать</span></button>
   </main>
   <div id="action-menu" class="action-menu hidden" role="menu"><button data-action="rename">Переименовать</button><button data-action="copy">Создать копию</button><button data-action="move">Переложить</button><button data-action="delete" class="danger">Удалить</button></div>

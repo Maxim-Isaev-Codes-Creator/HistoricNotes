@@ -16,6 +16,7 @@ export function playSound(name){if(!settings.sounds)return;activateAudio();if(!c
   if(name==='paper_move'||name==='page'){rustle(0,name==='page'?.08:0);if(name==='page')rustle(.19,-.1);return;}
   if(name==='paper_store'){rustle(0,-.15);burst({duration:.3,frequency:560,gain:.015,at:.2,pitch:280,pan:-.3});return;}
   if(name==='paper_draw'){burst({duration:.18,frequency:490,gain:.014,pitch:800,pan:-.3});rustle(.1,-.15);return;}
+  if(name==='cord_tie'){rustle(0,-.4);burst({duration:.44,frequency:1260,filter:'bandpass',gain:.023,pitch:430,at:.1,pan:-.35});burst({duration:.22,frequency:540,filter:'bandpass',gain:.018,pitch:220,at:.38,pan:-.2});return;}
   if(name==='folder_open'||name==='folder_close'){rustle(0,-.15);burst({duration:.32,frequency:410,filter:'bandpass',gain:.026,pitch:170,at:.12,pan:-.2});if(name==='folder_close')burst({duration:.075,frequency:330,gain:.024,at:.34,pan:-.2});return;}
   if(name==='ink_dip'||name==='ink_lift'){tone(name==='ink_dip'?235:320,.14,.024,'sine');burst({duration:.11,frequency:name==='ink_dip'?410:750,gain:.018,pan:.65});return;}
   if(name==='drawer'){woodSlide(.05);return;}

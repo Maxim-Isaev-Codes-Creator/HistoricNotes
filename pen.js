@@ -25,19 +25,20 @@ const nib=new THREE.Mesh(new THREE.ConeGeometry(3.1,23,8),nibMat);nib.rotation.z
 stick(0,-22,0,-4,.45,nibMat);
 scene.add(new THREE.AmbientLight('#fff0d4',1.8));const light=new THREE.DirectionalLight('#fff1d5',2);light.position.set(-1,2,4);scene.add(light);
 let editor,active=false,mode='rest',target={x:0,y:0},current={x:0,y:0},last=0,lastInput=0,count=0,dipUntil=0,afterDip=null,writingUntil=0,onSound=()=>{},onInkChange=()=>{},getInkwell=()=>null,restPoint={x:0,y:0};
-let dragId=null,dipStarted=0,wasDipped=false,inkLevel=.72,lastInkNotice=0,lastScratch=0,autoDipSounded=false;
+let dragId=null,dipStarted=0,wasDipped=false,inkLevel=.68,lastInkNotice=0,lastScratch=0,autoDipSounded=false;
+export function getCurrentInkClass(){return `ink-${String(Math.round(200*Math.pow(inkLevel,.78))).padStart(3,'0')}`;}
 function xy(x,y){return {x:x-innerWidth/2,y:innerHeight/2-y};}
 function screen(point){return {x:point.x+innerWidth/2,y:innerHeight/2-point.y};}
-function announceInk(now){if(now-lastInkNotice<150)return;lastInkNotice=now;const light=[88,79,68],dark=[23,21,19];const color=`rgb(${light.map((value,i)=>Math.round(value+(dark[i]-value)*inkLevel)).join(',')})`;onInkChange(color,inkLevel);}
+function announceInk(now){if(now-lastInkNotice<150)return;lastInkNotice=now;const light=[139,137,133],dark=[18,19,20];const tone=Math.pow(inkLevel,.78);const color=`rgb(${light.map((value,i)=>Math.round(value+(dark[i]-value)*tone)).join(',')})`;onInkChange(color,inkLevel);}
 function place(){const sheet=document.querySelector('.editor-wrap')?.getBoundingClientRect();if(!sheet)return;restPoint=xy(Math.min(innerWidth-44,sheet.right+34),sheet.top+130);if(!active||mode==='rest')target={...restPoint};}
 function caret(){const selection=getSelection();if(!selection?.rangeCount||!editor.contains(selection.anchorNode))return null;const range=selection.getRangeAt(0).cloneRange();range.collapse(true);let rect=range.getClientRects()[0];if(!rect){const node=editor.getBoundingClientRect();rect={left:node.left+8,top:node.top+12,height:24};}return xy(rect.left+2,rect.top+rect.height*.72);}
 function resize(){camera.left=-innerWidth/2;camera.right=innerWidth/2;camera.top=innerHeight/2;camera.bottom=-innerHeight/2;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight,false);place();if(active&&mode==='writing'){const at=caret();if(at)target=at;}}
 function tick(now){requestAnimationFrame(tick);const dt=Math.min(50,now-last||16);last=now;if(!active)return;
-  if(mode==='drag'&&dipStarted){inkLevel=Math.min(1,.3+(now-dipStarted)/2600*.7);announceInk(now);}
-  else if(mode!=='dip'&&mode!=='writing'){inkLevel=Math.max(.28,inkLevel-dt*.00004);announceInk(now);}
+  if(mode==='drag'&&dipStarted){inkLevel=Math.min(1,.24+.76*(1-Math.exp(-(now-dipStarted)/1400)));announceInk(now);}
+  else if(mode!=='dip'&&mode!=='writing'){inkLevel=Math.max(0,inkLevel*Math.exp(-dt/95000));announceInk(now);}
   if(mode==='writing'&&now>writingUntil){mode='rest';target={...restPoint};onSound('pen_lift');}
   if(mode==='dip'&&!autoDipSounded&&Math.hypot(target.x-current.x,target.y-current.y)<16){autoDipSounded=true;onSound('ink_dip');}
-  if(mode==='dip'&&now>dipUntil){mode='writing';target=afterDip||restPoint;writingUntil=now+900;inkLevel=Math.min(1,inkLevel+.32);announceInk(now+200);onSound('ink_lift');}
+  if(mode==='dip'&&now>dipUntil){mode='writing';target=afterDip||restPoint;writingUntil=now+900;inkLevel=Math.max(inkLevel,.62);announceInk(now+200);onSound('ink_lift');}
   const ease=1-Math.exp(-dt*(mode==='drag'?.075:mode==='writing'?.014:.009));current.x+=(target.x-current.x)*ease;current.y+=(target.y-current.y)*ease;
   if(mode==='writing'&&Math.hypot(target.x-current.x,target.y-current.y)>2&&now-lastScratch>85){lastScratch=now;onSound('scratch');}
   quill.position.set(current.x,current.y+(mode==='dip'?8:mode==='rest'?4:Math.sin(now*.025)*1.2),0);
@@ -53,7 +54,7 @@ export function penLeave(){active=false;canvas.classList.remove('active');mode='
 export function penInput(event){if(!active)return;const at=caret();if(!at)return;const now=performance.now();const before=target;afterDip=at;count+=event?.data?.length||1;
   if(count>=110){count=0;mode='dip';const well=getInkwell();if(well){target=xy(well.x,well.y);dipUntil=now+850;autoDipSounded=false;return;}}
   mode='writing';target=at;writingUntil=now+1300;
-  inkLevel=Math.max(.28,inkLevel-.004*(event?.data?.length||1));announceInk(now);
+  inkLevel=Math.max(0,inkLevel-.004*(event?.data?.length||1));announceInk(now);
   if(Math.abs(before.y-at.y)>18)onSound('new_line');
   lastInput=now;
 }

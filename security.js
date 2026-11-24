@@ -2,7 +2,7 @@ import { getMeta, setMeta } from './storage.js';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-const ITERATIONS = 310000;
+const ITERATIONS = 600000;
 let activeKey = null;
 
 const random = size => crypto.getRandomValues(new Uint8Array(size));
@@ -29,6 +29,7 @@ export async function hasPassword() { return Boolean(await getMeta('vault')); }
 
 export async function createPassword(password) {
   if (await hasPassword()) throw new Error('Пароль уже создан');
+  if (typeof password !== 'string' || password.length < 12) throw new Error('Пароль должен содержать не менее 12 символов');
   const salt = random(16);
   const key = await derive(password, salt, ITERATIONS);
   const verifier = await seal(key, { marker: 'historic-cabinet-v1' });
@@ -39,6 +40,13 @@ export async function createPassword(password) {
 export async function unlock(password) {
   const vault = await getMeta('vault');
   if (!vault) throw new Error('Кабинет ещё не создан');
+  if (!Array.isArray(vault.salt) || vault.salt.length !== 16 ||
+      !vault.salt.every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 255) ||
+      !Number.isInteger(vault.iterations) || vault.iterations < 100000 || vault.iterations > 1000000 ||
+      !Array.isArray(vault.verifier?.iv) || vault.verifier.iv.length !== 12 ||
+      !Array.isArray(vault.verifier?.ciphertext) || vault.verifier.ciphertext.length < 16) {
+    throw new Error('Данные кабинета повреждены');
+  }
   const key = await derive(password, vault.salt, vault.iterations);
   try {
     const value = await unseal(key, vault.verifier);
