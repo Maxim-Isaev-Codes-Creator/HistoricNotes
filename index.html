@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#23170f">
+  <meta name="description" content="Личный исторический письменный кабинет. Документы хранятся только на этом устройстве.">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <title>Письменный кабинет</title>
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <canvas id="world" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+  <header class="masthead">
+    <div class="header-actions"><span id="save-status" role="status" aria-live="polite"></span><button id="lock-button" class="icon-button" title="Запереть кабинет" aria-label="Запереть кабинет">♙</button><button id="settings-button" class="icon-button" title="Настройки" aria-label="Настройки">⚙</button></div>
+  </header>
+  <main>
+    <section id="cabinet-view" class="view active" aria-label="Письменный шкаф">
+      <div class="drawer-instruction">Нажмите на ящик или табличку</div>
+    </section>
+    <section id="shelf-view" class="view" aria-label="Отделение шкафа">
+      <div class="shelf-panel">
+        <div class="section-head"><button id="back-to-cabinet" class="text-button">← Закрыть ящик</button><span class="eyebrow">ОТКРЫТЫЙ ЯЩИК</span></div>
+        <h2 id="shelf-title"></h2><p id="shelf-subtitle" class="section-note"></p>
+        <div id="documents" class="documents"></div>
+      </div>
+    </section>
+    <section id="reading-view" class="view" aria-label="Чтение бумаг">
+      <button id="back-from-reading" class="text-button">← К ящику</button>
+      <article id="read-paper"><h2 id="read-title"></h2><div id="read-content"></div><nav id="read-pages"><button id="read-previous" type="button" aria-label="Предыдущий лист">←</button><button id="read-next" type="button" aria-label="Следующий лист">→</button></nav></article><div class="reading-hand left" aria-hidden="true"><span></span></div><div class="reading-hand right" aria-hidden="true"><span></span></div>
+    </section>
+    <section id="desk-view" class="view" aria-label="Письменный стол">
+      <div class="desk-topbar"><button id="back-to-shelf" class="text-button">← Вернуться к шкафу</button><span id="desk-location"></span><button id="document-menu-button" class="text-button">⋯</button></div>
+      <button id="folder-open-hit" type="button" aria-label="Открыть папку"></button>
+      <div class="desk-actions"><button id="ink-action" type="button" title="Открыть или закрыть чернильницу" aria-label="Чернильница">◉</button><button id="fold-action" type="button" title="Сложить или развернуть бумаги" aria-label="Сложить бумаги">▱</button><button id="wax-action" type="button" title="Поставить сургучную печать" aria-label="Поставить печать">●</button></div>
+      <div class="editor-wrap"><div class="paper-top"><input id="document-title" aria-label="Название бумаги" maxlength="120"></div><div id="editor" contenteditable="true" role="textbox" aria-label="Текст бумаги" aria-multiline="true" data-placeholder="" spellcheck="true"></div></div>
+        <div id="sheet-tabs" aria-label="Листы в папке"></div>
+      <div id="format-bar" class="format-bar" aria-label="Работа с бумагой"><button id="find-button" title="Найти в бумаге" aria-label="Найти">⌕</button><button id="undo-button" title="Отменить" aria-label="Отменить">↶</button><button id="redo-button" title="Повторить" aria-label="Повторить">↷</button></div>
+      <div id="find-panel" class="find-panel hidden"><input id="find-input" placeholder="Найти в тексте" aria-label="Найти в тексте"><span id="find-count"></span><button id="find-prev" aria-label="Предыдущее">↑</button><button id="find-next" aria-label="Следующее">↓</button><button id="find-close" aria-label="Закрыть поиск">×</button></div>
+    </section>
+    <button id="write-button" class="write-button">✎ <span>Написать</span></button>
+  </main>
+  <div id="action-menu" class="action-menu hidden" role="menu"><button data-action="rename">Переименовать</button><button data-action="copy">Создать копию</button><button data-action="move">Переложить</button><button data-action="delete" class="danger">Удалить</button></div>
+  <dialog id="move-dialog" class="parchment-dialog"><form method="dialog"><h2>Переложить бумаги</h2><div id="move-options"></div><button value="cancel" class="text-button">Отмена</button></form></dialog>
+  <dialog id="label-dialog" class="parchment-dialog"><form method="dialog"><h2>Подпись ящика</h2><input id="label-input" maxlength="24" aria-label="Подпись ящика"><div class="dialog-actions"><button value="cancel" class="text-button">Отмена</button><button id="save-label" value="save" class="small-primary">Сохранить</button></div></form></dialog>
+  <dialog id="settings-dialog" class="parchment-dialog"><form method="dialog"><h2>Настройки кабинета</h2><label>Качество графики<select name="quality"><option value="low">Низкое</option><option value="medium">Среднее</option><option value="high">Высокое</option></select></label><label>Тени<input type="checkbox" name="shadows"></label><label>Анимации<input type="checkbox" name="animations"></label><label>Подсказки<input type="checkbox" name="hints"></label><label>Скорость анимаций<select name="speed"><option value="fast">Быстро</option><option value="normal">Обычно</option><option value="slow">Медленно</option></select></label><label>Звуки<input type="checkbox" name="sounds"></label><label>Общая громкость<input type="range" name="volume" min="0" max="100"></label><label>Эффекты<input type="range" name="effectsVolume" min="0" max="100"></label><label>Атмосфера<input type="range" name="ambientVolume" min="0" max="100"></label><label>Освещение<select name="lighting"><option value="simple">Упрощённое</option><option value="full">Полное</option></select></label><button id="manage-current" type="button" class="text-button">Управление бумагой</button><p class="section-note">Документы остаются в хранилище этого браузера. Очистка данных сайта может их удалить.</p><button value="close" class="small-primary">Готово</button></form></dialog>
+  <div id="auth-screen" class="auth-screen"><div class="auth-card"><h1 id="auth-title">Откройте кабинет</h1><p id="auth-explainer"></p><form id="auth-form"><label for="password">Пароль</label><input id="password" type="password" autocomplete="current-password" required minlength="8"><button id="auth-submit" class="small-primary" type="submit">Открыть кабинет</button></form><p id="auth-error" class="error" role="alert"></p></div></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

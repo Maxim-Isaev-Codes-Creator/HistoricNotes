@@ -1,0 +1,10 @@
+{
+  "name": "historic-writing-cabinet",
+  "private": true,
+  "scripts": {
+    "start": "node dev-server.mjs"
+  },
+  "dependencies": {
+    "three": "0.180.0"
+  }
+}
