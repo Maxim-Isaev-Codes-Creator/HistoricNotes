@@ -23,6 +23,7 @@ export function playSound(name){if(!settings.sounds)return;activateAudio();if(!c
   if(name==='seal'){tone(175,.15,.12,'triangle');burst({duration:.21,frequency:620,gain:.05});return;}
   if(name==='wax'){burst({duration:.36,frequency:280,gain:.06});return;}
   if(name==='ambient_creak'){burst({duration:.7,frequency:170,gain:.019,out:atmosphere});return;}
+  if(name==='fire_burn'){burst({duration:.33,frequency:440+Math.random()*170,gain:.018,pitch:140,pan:-.78});burst({duration:.08,frequency:1700+Math.random()*900,gain:.023,at:.08+Math.random()*.12,pan:-.7});return;}
 }
 export function startAtmosphere(){if(!settings.sounds||ambientTimer)return;activateAudio();if(context){ambientSource=context.createBufferSource();ambientSource.buffer=noise(2);ambientSource.loop=true;const filter=context.createBiquadFilter();filter.type='lowpass';filter.frequency.value=210;const bed=context.createGain();bed.gain.value=.004;ambientSource.connect(filter).connect(bed).connect(atmosphere);ambientSource.start();}ambientTimer=setInterval(()=>{if(!context||!enabled)return;burst({duration:.065,frequency:1600,gain:.009,out:atmosphere,pan:-.65});if(Math.random()<.18)playSound('ambient_creak');},1400);}
 export function stopAtmosphere(){if(ambientTimer)clearInterval(ambientTimer);ambientTimer=null;if(ambientSource){ambientSource.stop();ambientSource=null;}}

@@ -7,7 +7,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const publicFiles = new Set([
   'index.html', 'styles.css', 'ink.css', 'app.js', 'scene.js', 'pages.js', 'pen.js', 'sound.js',
   'storage.js', 'security.js', 'editor.js', 'settings.js', 'sw.js',
-  'manifest.json', 'icon.jpg', 'icon.svg', 'vendor/three.module.js',
+  'manifest.json', 'icon.jpg', 'icon.svg', 'painting-ruisdael-1646.jpg', 'vendor/three.module.js',
   'vendor/three.core.js', 'vendor/RoundedBoxGeometry.js',
 ]);
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg' };

@@ -21,6 +21,7 @@
     <div class="header-actions"><span id="save-status" role="status" aria-live="polite"></span><button id="lock-button" class="icon-button" title="Запереть кабинет" aria-label="Запереть кабинет">♙</button><button id="settings-button" class="icon-button" title="Настройки" aria-label="Настройки">⚙</button></div>
   </header>
   <main>
+    <div id="walk-controls" class="walk-controls"><button type="button" id="walk-stick" aria-label="Удерживайте для ходьбы, сдвиньте для выбора направления">●</button></div>
     <section id="cabinet-view" class="view active" aria-label="Письменный шкаф">
       <div class="drawer-instruction">Нажмите на ящик или табличку</div>
     </section>
@@ -45,7 +46,7 @@
       <div id="find-panel" class="find-panel hidden"><input id="find-input" placeholder="Найти в тексте" aria-label="Найти в тексте"><span id="find-count"></span><button id="find-prev" aria-label="Предыдущее">↑</button><button id="find-next" aria-label="Следующее">↓</button><button id="find-close" aria-label="Закрыть поиск">×</button></div>
     </section>
     <button id="decrypt-button" class="write-button hidden" type="button" aria-label="Сохранить текст связки в буфер обмена">Сохранить</button>
-    <button id="write-button" class="write-button">✎ <span>Написать</span></button>
+    <button id="write-button" class="write-button hidden">✎ <span>Написать</span></button>
   </main>
   <div id="action-menu" class="action-menu hidden" role="menu"><button data-action="rename">Переименовать</button><button data-action="copy">Создать копию</button><button data-action="move">Переложить</button><button data-action="delete" class="danger">Удалить</button></div>
   <dialog id="move-dialog" class="parchment-dialog"><form method="dialog"><h2>Переложить бумаги</h2><div id="move-options"></div><button value="cancel" class="text-button">Отмена</button></form></dialog>

@@ -111,3 +111,24 @@ main{position:relative;z-index:2;pointer-events:none}main button,main input,main
 #decrypt-button,#write-button{z-index:20}
 #decrypt-button.hidden{display:none}
 @media(max-width:600px){#reading-view.active~#decrypt-button{left:12px;right:auto;bottom:max(18px,env(safe-area-inset-bottom));min-height:52px;max-width:44vw;font-size:12px;padding:10px 12px}#reading-view.active~#write-button{left:auto;right:12px;transform:none;max-width:44vw;padding:10px 12px}}
+
+/* The page number occupies the margin; an empty title does not reserve writing lines. */
+#desk-view #editor{top:6%;bottom:5%;line-height:1.32}
+#desk-view.has-title #editor{top:13%}
+#read-content{top:6%;bottom:5%;font-size:clamp(11px,3.7cqw,18px);line-height:1.32}
+#read-paper.has-title #read-content{top:13%}
+#read-paper h2{font-size:clamp(12px,4.4cqw,22px)}
+#desk-view .paper-top{top:4%;height:7%}
+#desk-view .paper-number,#read-paper .paper-number{top:1%;right:3%;font-size:clamp(11px,2.8cqw,17px)}
+@media(max-width:600px){
+  #desk-view #editor{width:123%;height:125%!important;right:auto;bottom:auto;transform:scale(.71);transform-origin:top left;line-height:1.32}
+  #desk-view.has-title #editor{height:119%!important}
+  #read-paper{margin-top:78px;width:min(calc(100% - 24px),calc((100dvh - 120px)/1.414))}
+  #read-content{font-size:clamp(10px,3.1cqw,14px);line-height:1.3}
+  .reading-hand{bottom:4vh}
+}
+.walk-controls{position:fixed;left:max(18px,env(safe-area-inset-left));bottom:max(22px,env(safe-area-inset-bottom));z-index:12;display:none;touch-action:none;opacity:.72}
+body.room-walk .walk-controls{display:block}
+#walk-stick{width:66px;height:66px;border:1px solid #b99460;border-radius:50%;background:#241912bd;color:#ead9b8;font:26px Georgia,serif;touch-action:none;user-select:none}
+#walk-stick:active{background:#6b4428d9}
+@media (min-width:700px){.walk-controls{display:none!important}}

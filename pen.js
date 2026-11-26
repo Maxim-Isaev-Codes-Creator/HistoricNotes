@@ -24,13 +24,13 @@ for(const side of [-1,1]){
 const nib=new THREE.Mesh(new THREE.ConeGeometry(3.1,23,8),nibMat);nib.rotation.z=Math.PI;nib.position.set(0,-11,1);quill.add(nib);
 stick(0,-22,0,-4,.45,nibMat);
 scene.add(new THREE.AmbientLight('#fff0d4',1.8));const light=new THREE.DirectionalLight('#fff1d5',2);light.position.set(-1,2,4);scene.add(light);
-let editor,active=false,mode='rest',target={x:0,y:0},current={x:0,y:0},last=0,lastInput=0,count=0,dipUntil=0,afterDip=null,writingUntil=0,onSound=()=>{},onInkChange=()=>{},getInkwell=()=>null,restPoint={x:0,y:0};
+let editor,active=false,mode='rest',target={x:0,y:0},current={x:0,y:0},last=0,lastInput=0,count=0,dipUntil=0,afterDip=null,writingUntil=0,onSound=()=>{},onInkChange=()=>{},getInkwell=()=>null,getRedInkwell=()=>null,restPoint={x:0,y:0},inkColor='black';
 let dragId=null,dipStarted=0,wasDipped=false,inkLevel=.68,lastInkNotice=0,lastScratch=0,autoDipSounded=false;
-export function getCurrentInkClass(){return `ink-${String(Math.round(200*Math.pow(inkLevel,.78))).padStart(3,'0')}`;}
+export function getCurrentInkClass(){return `ink-${inkColor==='red'?'red-':''}${String(Math.round(200*Math.pow(inkLevel,.78))).padStart(3,'0')}`;}
 function xy(x,y){return {x:x-innerWidth/2,y:innerHeight/2-y};}
 function screen(point){return {x:point.x+innerWidth/2,y:innerHeight/2-point.y};}
-function announceInk(now){if(now-lastInkNotice<150)return;lastInkNotice=now;const light=[139,137,133],dark=[18,19,20];const tone=Math.pow(inkLevel,.78);const color=`rgb(${light.map((value,i)=>Math.round(value+(dark[i]-value)*tone)).join(',')})`;onInkChange(color,inkLevel);}
-function place(){const sheet=document.querySelector('.editor-wrap')?.getBoundingClientRect();if(!sheet)return false;const scale=innerWidth<650?.78:.84;const x=THREE.MathUtils.clamp(sheet.right+24,22,innerWidth-106*scale);const y=THREE.MathUtils.clamp(sheet.top+Math.min(130,sheet.height*.32),100*scale,innerHeight-44);restPoint=xy(x,y);if(!active||mode==='rest')target={...restPoint};return sheet.left>=-10&&sheet.right<=innerWidth+10&&sheet.top>=55&&sheet.bottom<=innerHeight-20;}
+function announceInk(now){if(now-lastInkNotice<150)return;lastInkNotice=now;const light=inkColor==='red'?[174,112,103]:[139,137,133],dark=inkColor==='red'?[98,14,23]:[18,19,20];const tone=Math.pow(inkLevel,.78);const color=`rgb(${light.map((value,i)=>Math.round(value+(dark[i]-value)*tone)).join(',')})`;onInkChange(color,inkLevel);}
+function place(){const sheet=document.querySelector('.editor-wrap')?.getBoundingClientRect();if(!sheet)return false;const scale=innerWidth<650?.78:.84;const x=THREE.MathUtils.clamp(sheet.right+12,22,Math.max(22,innerWidth-106*scale));const y=THREE.MathUtils.clamp(sheet.top+Math.min(100,sheet.height*.28),Math.min(75,innerHeight*.25),Math.max(76,innerHeight-44));restPoint=xy(x,y);if(!active||mode==='rest')target={...restPoint};return sheet.right>0&&sheet.left<innerWidth&&sheet.bottom>45&&sheet.top<innerHeight-30;}
 function caret(){const selection=getSelection();if(!selection?.rangeCount||!editor.contains(selection.anchorNode))return null;const range=selection.getRangeAt(0).cloneRange();range.collapse(true);let rect=range.getClientRects()[0];if(!rect){const node=editor.getBoundingClientRect();rect={left:node.left+8,top:node.top+12,height:24};}return xy(rect.left+2,rect.top+rect.height*.72);}
 function resize(){camera.left=-innerWidth/2;camera.right=innerWidth/2;camera.top=innerHeight/2;camera.bottom=-innerHeight/2;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight,false);place();if(active&&mode==='writing'){const at=caret();if(at)target=at;}}
 function tick(now){requestAnimationFrame(tick);const dt=Math.min(50,now-last||16);last=now;if(!active)return;
@@ -49,18 +49,18 @@ function tick(now){requestAnimationFrame(tick);const dt=Math.min(50,now-last||16
 }
 resize();requestAnimationFrame(tick);window.addEventListener('resize',resize);window.visualViewport?.addEventListener('resize',resize);window.addEventListener('scroll',()=>{place();if(mode==='writing'){const at=caret();if(at)target=at;}},{passive:true});
 document.addEventListener('selectionchange',()=>{if(!active||mode==='dip')return;const at=caret();if(at&&mode==='writing')target=at;});
-export function initPen(element,sound,inkChange,inkwell){editor=element;onSound=sound;onInkChange=inkChange;getInkwell=inkwell;place();announceInk(performance.now()+200);}
+export function initPen(element,sound,inkChange,inkwell,redInkwell){editor=element;onSound=sound;onInkChange=inkChange;getInkwell=inkwell;getRedInkwell=redInkwell;place();announceInk(performance.now()+200);}
 export function penEnter(){active=true;mode='rest';const sheetVisible=place();current={...restPoint};canvas.classList.toggle('active',Boolean(sheetVisible));}
 export function penLeave(){active=false;canvas.classList.remove('active');mode='rest';dragId=null;dipStarted=0;}
 export function penInput(event){if(!active)return;const at=caret();if(!at)return;const now=performance.now();const before=target;afterDip=at;count+=event?.data?.length||1;
   if(count>=110){count=0;mode='dip';const well=getInkwell();if(well){target=xy(well.x,well.y);dipUntil=now+850;autoDipSounded=false;return;}}
-  mode='writing';target=at;writingUntil=now+1300;
+  mode='writing';target=at;writingUntil=now+2300;
   inkLevel=Math.max(0,inkLevel-.004*(event?.data?.length||1));announceInk(now);
   if(Math.abs(before.y-at.y)>18)onSound('new_line');
   lastInput=now;
 }
 export function penTouch(){if(!active)return;const at=caret();if(at){mode='writing';target=at;writingUntil=performance.now()+700;onSound('pen_touch');}}
 document.addEventListener('pointerdown',event=>{if(!active||dragId!==null||event.target instanceof Element&&event.target.closest('.editor-wrap,button,input,[contenteditable]'))return;const point=screen(current);const feather={x:point.x+45*(innerWidth<650?.78:.84),y:point.y-68*(innerWidth<650?.78:.84)};if(Math.hypot(event.clientX-feather.x,event.clientY-feather.y)>55)return;event.preventDefault();event.stopPropagation();dragId=event.pointerId;mode='drag';target=xy(event.clientX,event.clientY);wasDipped=false;dipStarted=0;document.documentElement.style.touchAction='none';},{capture:true,passive:false});
-document.addEventListener('pointermove',event=>{if(dragId!==event.pointerId)return;event.preventDefault();target=xy(event.clientX,event.clientY);const well=getInkwell();const inWell=well&&Math.hypot(event.clientX-well.x,event.clientY-well.y)<48;if(inWell){if(!dipStarted){dipStarted=performance.now();wasDipped=true;onSound('ink_dip');}}else if(dipStarted){dipStarted=0;onSound('ink_lift');}},{passive:false});
+document.addEventListener('pointermove',event=>{if(dragId!==event.pointerId)return;event.preventDefault();target=xy(event.clientX,event.clientY);const wells=[['black',getInkwell()],['red',getRedInkwell()]];const match=wells.find(([,well])=>well&&Math.hypot(event.clientX-well.x,event.clientY-well.y)<48);if(match){if(!dipStarted||inkColor!==match[0]){inkColor=match[0];dipStarted=performance.now();wasDipped=true;onSound('ink_dip');announceInk(performance.now()+200);}}else if(dipStarted){dipStarted=0;onSound('ink_lift');}},{passive:false});
 function endDrag(event){if(dragId!==event.pointerId)return;event.preventDefault();dragId=null;document.documentElement.style.touchAction='';if(dipStarted){dipStarted=0;onSound('ink_lift');}if(wasDipped)announceInk(performance.now()+200);mode='rest';place();onSound('pen_lift');}
 document.addEventListener('pointerup',endDrag,{passive:false});document.addEventListener('pointercancel',endDrag,{passive:false});

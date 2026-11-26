@@ -2,13 +2,13 @@ import { openStore, listRecords, putRecord, deleteRecord, getMeta, setMeta } fro
 import { hasPassword, createPassword, unlock, lock, isUnlocked, encryptDocument, decryptDocument, encryptPrivate, decryptPrivate } from './security.js';
 import { setupEditor, sanitizeHTML, format, searchText } from './editor.js';
 import { loadSettings, saveSettings } from './settings.js';
-import { compartments, initScene, showCabinet, focusCompartment, showDesk, applySceneSettings, setDrawerLabel, setDrawerDocuments, toggleInkLid, setInkLid, stampSeal, foldPaper, showWaxMark, closeDeskFolder, openDeskFolder, setFolderSheetCount, setRestQuillVisible, getInkwellScreenPosition, getDeskFolderScreenBounds, getLooseCordScreenPosition, setBundleBound, getDeskPaperScreenBounds, getDeskZoom, setDeskZoom } from './scene.js';
+import { compartments, initScene, showCabinet, focusCompartment, showDesk, applySceneSettings, setDrawerLabel, setDrawerDocuments, setCarriedBundle, toggleInkLid, setInkLid, stampSeal, foldPaper, showWaxMark, closeDeskFolder, openDeskFolder, setFolderSheetCount, setRestQuillVisible, getInkwellScreenPosition, getRedInkwellScreenPosition, getDeskFolderScreenBounds, getLooseCordScreenPosition, setBundleBound, getDeskPaperScreenBounds, getDeskZoom, setDeskZoom, burnBundle } from './scene.js';
 import { initPen, penEnter, penLeave, penInput, penTouch, getCurrentInkClass } from './pen.js';
 import { configureSound, activateAudio, playSound, startAtmosphere, stopAtmosphere } from './sound.js';
 import { MAX_FOLDER_PAGES, INITIAL_BUNDLE_PAGES, bundlePages, romanPage } from './pages.js';
 
 const $ = selector => document.querySelector(selector);
-const state = { documents: [], labels:{}, labelTarget:null,current: null, reading:null, readingPage:0, shelf: null, pageIndex:0, pageSwitching:false, folded:false, folderOpen:false, saveTimer: null, saveChain: Promise.resolve(), version: 0, savedVersion: 0, idleTimer: null, searchIndex: 0, settings: loadSettings(), view: 'cabinet' };
+const state = { documents: [], labels:{}, labelTarget:null,current: null, carrying:null, reading:null, readingPage:0, shelf: null, pageIndex:0, pageSwitching:false, folded:false, folderOpen:false, saveTimer: null, saveChain: Promise.resolve(), version: 0, savedVersion: 0, idleTimer: null, searchIndex: 0, settings: loadSettings(), view: 'cabinet' };
 const editor = $('#editor');
 const titleInput = $('#document-title');
 function hasWrittenPaper(doc){return (doc.pages?.length?doc.pages:[doc.content||'']).some(page=>page.replace(/<[^>]*>/g,'').replace(/&nbsp;|&#160;/gi,' ').trim().length>0);}
@@ -22,7 +22,7 @@ function view(name) {
   state.view = name;
   document.body.classList.toggle('reading-active', name === 'reading');
   for (const section of document.querySelectorAll('.view')) section.classList.toggle('active', section.id === `${name}-view`);
-  $('#write-button').classList.toggle('hidden',name==='desk');
+  $('#write-button').classList.toggle('hidden',name==='desk'||name==='cabinet');
   $('#decrypt-button').classList.toggle('hidden',name!=='reading');
   $('#action-menu').classList.add('hidden');
   if(name==='desk'){showDesk();penLeave();setRestQuillVisible(true);startAtmosphere();playSound('paper_move');}
@@ -71,7 +71,7 @@ async function safeLeave(next) {
 
 function renderShelf() {
   const comp = compartments.find(item => item.id === state.shelf);
-  $('#shelf-title').textContent = state.labels[comp.id] || '';
+  $('#shelf-title').textContent = state.labels[comp.id] || comp.name;
   const container = $('#documents'); container.replaceChildren();
   const docs = state.documents.filter(doc => doc.compartmentId === comp.id&&hasWrittenPaper(doc)).sort((a,b) => b.modifiedAt.localeCompare(a.modifiedAt));
   setDrawerDocuments(comp.id,docs);
@@ -87,8 +87,9 @@ function renderShelf() {
 }
 
 function openShelf(id) { if(state.view==='shelf'&&state.shelf===id){view('cabinet');playSound('drawer');return;}state.shelf = id; renderShelf(); view('shelf'); playSound('drawer'); }
-function renderReading(){const pages=state.reading?.pages?.length?state.reading.pages:[state.reading?.content||''];$('#read-title').textContent=state.reading?.title||'';$('#read-content').innerHTML=sanitizeHTML(pages[state.readingPage]||'');$('#read-page-number').textContent=pageNumber(state.readingPage);for(const id of ['read-previous','read-left-edge'])$( `#${id}`).disabled=state.readingPage===0;for(const id of ['read-next','read-right-edge'])$( `#${id}`).disabled=state.readingPage>=pages.length-1;$('#read-pages').hidden=pages.length<2;}
+function renderReading(){const pages=state.reading?.pages?.length?state.reading.pages:[state.reading?.content||''];$('#read-title').textContent=state.reading?.title||'';$('#read-paper').classList.toggle('has-title',Boolean(state.reading?.title?.trim()));$('#read-content').innerHTML=sanitizeHTML(pages[state.readingPage]||'');$('#read-page-number').textContent=pageNumber(state.readingPage);for(const id of ['read-previous','read-left-edge'])$( `#${id}`).disabled=state.readingPage===0;for(const id of ['read-next','read-right-edge'])$( `#${id}`).disabled=state.readingPage>=pages.length-1;$('#read-pages').hidden=pages.length<2;}
 function readDocument(doc){state.reading={...doc,pages:bundlePages(doc.pages,doc.content)};state.readingPage=0;renderReading();view('reading');playSound('paper_draw');}
+async function burnDocument(id,documentId){const doc=state.documents.find(item=>item.id===documentId&&item.compartmentId===id);if(!doc)return;let soundTimer;try{playSound('fire_burn');soundTimer=setInterval(()=>playSound('fire_burn'),550);await burnBundle(doc.pages?.length||1);await deleteRecord(doc.id);state.documents=state.documents.filter(item=>item.id!==doc.id);if(state.shelf===id&&state.view==='shelf')renderShelf();else setDrawerDocuments(id,state.documents.filter(item=>item.compartmentId===id));toast('Бумаги сгорели');}catch(error){toast(`Не удалось сжечь бумаги: ${error.message}`);}finally{clearInterval(soundTimer);}}
 function pagePlainText(html) {
   const root = document.createElement('div'); root.innerHTML = sanitizeHTML(html || '');
   let text = '';
@@ -100,12 +101,14 @@ function pagePlainText(html) {
     if (/^(DIV|P|H[1-6]|LI|BLOCKQUOTE)$/.test(node.tagName) && !text.endsWith('\n')) text += '\n';
   }
   for (const child of root.childNodes) visit(child);
-  return text.replace(/[ \t]+\n/g, '\n').trim();
+  return text.replace(/[ \t]+\n/g, '\n');
 }
+function joinedPageText(pages){return pages.map(pagePlainText).join('').replace(/\n{3,}/g,'\n\n').trim();}
 async function copyOpenFolder() {
   if (!state.reading) return;
   const pages = state.reading.pages?.length ? state.reading.pages : [state.reading.content || ''];
-  const text = [state.reading.title?.trim(), ...pages.map(pagePlainText)].filter(Boolean).join('\n\n');
+  const body=joinedPageText(pages);
+  const text = state.reading.title?.trim() ? `${state.reading.title.trim()}\n\n${body}` : body;
   if (!text) { toast('В связке нет текста'); return; }
   try {
     let copied = false;
@@ -123,13 +126,26 @@ async function copyOpenFolder() {
   } catch { toast('Не удалось скопировать текст'); }
 }
 function openDocument(doc, initialPage=0) {
+  state.carrying=null;setCarriedBundle(false);
   state.current = {...doc,pages:bundlePages(doc.pages,doc.content),bound:doc.bound??((doc.pages?.length||1)>1)}; state.version = 0; state.savedVersion = 0;state.pageIndex=Math.min(Math.max(0,initialPage),state.current.pages.length-1,MAX_FOLDER_PAGES-1);
   titleInput.value = doc.title; editor.innerHTML = sanitizeHTML(state.current.pages[state.pageIndex]);updatePageControls();
+  $('#desk-view').classList.toggle('has-title',Boolean(doc.title?.trim()));
   state.folderOpen=false;$('#desk-view').classList.add('folder-closed');$('#folder-open-hit').classList.remove('hidden');$('#folder-open-hit').setAttribute('aria-label','Открыть связку');closeDeskFolder(doc.title);setBundleBound(state.current.bound);updatePageControls();
   state.folded=false;foldPaper(false);$('.editor-wrap').classList.remove('folded');$('#fold-action').textContent='▱';$('#fold-action').setAttribute('aria-label','Сложить бумаги');showWaxMark(Boolean(doc.sealed));
   $('#desk-location').textContent = state.labels[doc.compartmentId] || '';
   status('Сохранено'); view('desk');
   if(state.current.pages.length===1&&!state.current.bound){state.folderOpen=true;openDeskFolder();$('#desk-view').classList.remove('folder-closed');$('#folder-open-hit').setAttribute('aria-label','Закрыть связку');setRestQuillVisible(false);penEnter();}
+}
+function carryToDesk(doc,initialPage=0){
+  if(state.view==='desk'){safeLeave(()=>openDocument(doc,initialPage));return;}
+  state.carrying={doc,initialPage};
+  view('cabinet');setCarriedBundle(true);playSound('paper_draw');
+}
+function takeDeskBook(id){
+  const doc=state.documents.filter(item=>item.compartmentId===id).sort((a,b)=>b.modifiedAt.localeCompare(a.modifiedAt))[0];
+  if(doc){carryToDesk(doc);return;}
+  const now=new Date().toISOString();
+  carryToDesk({id:crypto.randomUUID(),title:'',pages:[''],content:'',bound:false,createdAt:now,modifiedAt:now,compartmentId:id,formatVersion:1});
 }
 function canExtendBundle(){return Boolean(state.current&&state.pageIndex===state.current.pages.length-1&&pagePlainText(editor.innerHTML));}
 function updatePageControls(){if(!state.current)return;const canAdd=canExtendBundle();state.addablePageVisible=canAdd;$('#write-page-number').textContent=pageNumber(state.pageIndex);setFolderSheetCount(state.current.pages.length,state.pageIndex,canAdd,state.current.bound);}
@@ -169,11 +185,11 @@ async function createDocument() {
   if(drawerCount(state.shelf)>=8){toast('В ящике уже восемь связок или листов');return;}
   const now = new Date().toISOString();
   const doc = { id: crypto.randomUUID(), title: '', pages:Array(INITIAL_BUNDLE_PAGES).fill(''), content: '', bound:false, createdAt: now, modifiedAt: now, compartmentId: state.shelf, formatVersion: 1 };
-  openDocument(doc);
+  carryToDesk(doc);
 }
 async function closeAndLock() {
   try { await flush(); } catch { toast('Ошибка сохранения: кабинет не заперт, повторите попытку'); return; }
-  state.current = null; state.reading = null; state.documents = []; state.labels={}; state.shelf = null; state.pageIndex=0;
+  state.current = null; state.carrying=null;setCarriedBundle(false);state.reading = null; state.documents = []; state.labels={}; state.shelf = null; state.pageIndex=0;
   editor.replaceChildren(); titleInput.value = '';
   for(const id of ['documents','read-content'])$( `#${id}`).replaceChildren();
   for(const id of ['read-title','read-page-number','write-page-number','shelf-title','desk-location','label-input'])$( `#${id}`).textContent='';
@@ -193,7 +209,7 @@ async function loadDocuments() {
   const labelEnvelope=await getMeta('labels');
   state.labels=labelEnvelope?await decryptPrivate(labelEnvelope):{};
   for(const id of Object.keys(state.labels))if(state.labels[id]==='Мои письма')state.labels[id]='';
-  for(const comp of compartments)setDrawerLabel(comp.id,state.labels[comp.id]||'');
+  for(const comp of compartments)setDrawerLabel(comp.id,state.labels[comp.id]||comp.name);
   for(const [index,button] of [...document.querySelectorAll('#move-options button')].entries())button.textContent=state.labels[button.dataset.drawer]||`Ящик ${index+1}`;
 }
 
@@ -231,14 +247,29 @@ function setupSettings() {
 }
 
 function setupEvents() {
-  initScene((id,type,documentId)=>{if(type==='label')editLabel(id);else if(type==='folder'||type==='edit-folder'){const doc=state.documents.find(item=>item.id===documentId);if(doc){state.shelf=id;if(type==='edit-folder')openDocument(doc);else readDocument(doc);}}else openShelf(id);},index=>{if(state.view==='desk'&&state.folderOpen&&state.current)changePage(index-state.pageIndex);});initPen(editor,name=>{if(name==='ink_dip')setInkLid(true);if(name==='ink_lift')setInkLid(false);playSound(name);},(color,level)=>{editor.style.setProperty('--ink-color',color);editor.style.setProperty('--ink-bleed',`${Math.max(0,level-.5)*2.6}px`);editor.style.setProperty('--ink-spread',`${.014+Math.max(0,level-.5)*.04}em`);},getInkwellScreenPosition); showCabinet(); setupSettings();
-  let deskKeyboardShift=0;
+  initScene((id,type,documentId)=>{
+    if(type==='too-far'){toast('Подойдите ближе');return;}
+    if(type==='desk-slide'||type==='bureau-door'){playSound(type==='bureau-door'?'door':'drawer');return;}
+    if(type==='sit'){
+      if(!state.carrying){toast('Возьмите бумаги');return;}
+      const {doc,initialPage}=state.carrying;openDocument(doc,initialPage);return;
+    }
+    if(type==='desk-book'){takeDeskBook(id);return;}
+    if(type==='label'){editLabel(id);return;}
+    if(type==='burn-folder'){burnDocument(id,documentId);return;}
+    if(type==='folder'||type==='edit-folder'){
+      const doc=state.documents.find(item=>item.id===documentId);
+      if(doc){state.shelf=id;if(type==='edit-folder')carryToDesk(doc);else readDocument(doc);}
+      return;
+    }
+    openShelf(id);
+  },index=>{if(state.view==='desk'&&state.folderOpen&&state.current)changePage(index-state.pageIndex);});initPen(editor,name=>{if(name==='ink_dip')setInkLid(true);if(name==='ink_lift')setInkLid(false);playSound(name);},(color,level)=>{editor.style.setProperty('--ink-color',color);editor.style.setProperty('--ink-bleed',`${Math.max(0,level-.5)*2.6}px`);editor.style.setProperty('--ink-spread',`${.014+Math.max(0,level-.5)*.04}em`);},getInkwellScreenPosition,getRedInkwellScreenPosition); showCabinet(); setupSettings();
   const positionDesk=()=>{
-    requestAnimationFrame(positionDesk);if(state.view!=='desk'){deskKeyboardShift=0;$('#world').style.transform='';return;}
+    requestAnimationFrame(positionDesk);if(state.view!=='desk')return;
     const box=getDeskFolderScreenBounds();
     if(box){const hit=$('#folder-open-hit');hit.style.display=state.current?.pages.length===1?'none':'';hit.style.left=`${box.x}px`;hit.style.top=`${state.folderOpen?box.y-box.height*.75:box.y}px`;hit.style.width=`${box.width*1.08}px`;hit.style.height=`${box.height*(state.folderOpen?.7:1.14)}px`;}
     const cord=getLooseCordScreenPosition(),bind=$('#bind-hit');bind.style.display=state.folderOpen&&!state.current?.bound?'':'none';if(cord){bind.style.left=`${cord.x}px`;bind.style.top=`${cord.y}px`;}
-    const paper=getDeskPaperScreenBounds();if(paper){const sheet=$('.editor-wrap');sheet.style.left=`${paper.x}px`;sheet.style.top=`${paper.y}px`;sheet.style.width=`${paper.width}px`;sheet.style.height=`${paper.height}px`;const size=paper.width;const inset=Math.max(2,size*.065);sheet.style.padding=`${inset}px`;const minInputSize=innerWidth<650?16:3;editor.style.fontSize=`${Math.min(23,Math.max(minInputSize,size*.058))}px`;editor.style.height=`calc(100% - ${Math.max(8,size*.16)}px)`;titleInput.style.fontSize=`${Math.min(26,Math.max(minInputSize,size*.075))}px`;$('#write-page-number').style.fontSize=`${Math.min(18,Math.max(7,size*.06))}px`;const world=$('#world'),visibleBottom=(window.visualViewport?.offsetTop||0)+(window.visualViewport?.height||innerHeight),fullHeight=parseFloat(world.style.height)||innerHeight,typing=document.activeElement===editor||document.activeElement===titleInput;const keyboardOpen=innerWidth<650&&typing&&visibleBottom<fullHeight*.88;const shift=keyboardOpen?Math.max(0,Math.min(220,paper.y+paper.height/2+deskKeyboardShift-visibleBottom+22,paper.y-paper.height/2+deskKeyboardShift-70)):0;if(Math.abs(shift-deskKeyboardShift)>1){deskKeyboardShift=shift;world.style.transform=shift?`translateY(-${shift}px)`:'';}}
+    const paper=getDeskPaperScreenBounds();if(paper){const sheet=$('.editor-wrap');sheet.style.left=`${paper.x}px`;sheet.style.top=`${paper.y}px`;sheet.style.width=`${paper.width}px`;sheet.style.height=`${paper.height}px`;const size=paper.width;const inset=Math.max(2,size*.065);sheet.style.padding=`${inset}px`;editor.style.fontSize=innerWidth<650?'16px':`${Math.min(17,Math.max(10,size*.04))}px`;titleInput.style.fontSize=innerWidth<650?'16px':`${Math.min(20,Math.max(12,size*.055))}px`;$('#write-page-number').style.fontSize=`${Math.min(18,Math.max(7,size*.06))}px`;}
   };requestAnimationFrame(positionDesk);
   let pinchDistance=0;
   const distance=touches=>Math.hypot(touches[0].clientX-touches[1].clientX,touches[0].clientY-touches[1].clientY);
@@ -247,7 +278,7 @@ function setupEvents() {
     surface.addEventListener('touchmove',event=>{if(state.view!=='desk'||event.touches.length!==2)return;event.preventDefault();const next=distance(event.touches);if(pinchDistance>0)setDeskZoom(getDeskZoom()*next/pinchDistance);pinchDistance=next;},{passive:false});
     surface.addEventListener('touchend',event=>{if(event.touches.length<2)pinchDistance=0;},{passive:true});
   }
-  $('#write-button').onclick = () => state.view === 'reading' && state.reading ? openDocument(state.reading,state.readingPage) : createDocument();
+  $('#write-button').onclick = () => state.view === 'reading' && state.reading ? carryToDesk(state.reading,state.readingPage) : createDocument();
   $('#decrypt-button').onclick = copyOpenFolder;
   $('#bind-hit').onclick=async()=>{if(!state.current||!state.folderOpen||state.current.bound)return;try{await flush();playSound('paper_store');await animatePageMove('out');$('#desk-view').classList.add('binding-sheet-away');if(state.current.pages.length>1){setFolderSheetCount(state.current.pages.length,state.current.pages.length,false,false);state.current.bound=true;dirty();setBundleBound(true,true);playSound('cord_tie');await saveCurrent();await new Promise(resolve=>setTimeout(resolve,1450));}await safeLeave(()=>view('cabinet'));}catch(error){$('#desk-view').classList.remove('binding-sheet-away');toast(`Не удалось сохранить: ${error.message}`);}};
   $('#folder-open-hit').onclick=()=>{if(state.folderOpen){state.folderOpen=false;$('#desk-view').classList.add('folder-closed');$('#folder-open-hit').setAttribute('aria-label','Открыть связку');closeDeskFolder(state.current?.title||'');penLeave();setRestQuillVisible(true);playSound('folder_close');saveCurrent().catch(()=>{});return;}state.folderOpen=true;openDeskFolder();$('#folder-open-hit').setAttribute('aria-label','Закрыть связку');playSound('folder_open');setTimeout(()=>{if(state.view!=='desk'||!state.folderOpen)return;$('#desk-view').classList.remove('folder-closed');setRestQuillVisible(false);penEnter();editor.focus();},520);};
@@ -257,8 +288,8 @@ function setupEvents() {
   const flipReading=direction=>{const next=state.readingPage+direction;if(!state.reading||next<0||next>=state.reading.pages.length)return;state.readingPage=next;renderReading();const paper=$('#read-paper');paper.classList.remove('turning');void paper.offsetWidth;paper.classList.add('turning');playSound('page');};
   for(const id of ['read-previous','read-left-edge'])$( `#${id}`).onclick=()=>flipReading(-1);
   for(const id of ['read-next','read-right-edge'])$( `#${id}`).onclick=()=>flipReading(1);
-  $('#documents').onclick = event => { const button = event.target.closest('[data-id]'); if (button) { const doc = state.documents.find(item => item.id === button.dataset.id); if (doc) openDocument(doc); } };
-  titleInput.addEventListener('input', dirty);
+  $('#documents').onclick = event => { const button = event.target.closest('[data-id]'); if (button) { const doc = state.documents.find(item => item.id === button.dataset.id); if (doc) carryToDesk(doc); } };
+  titleInput.addEventListener('input',()=>{$('#desk-view').classList.toggle('has-title',Boolean(titleInput.value.trim()));dirty();});
   setupEditor(editor, event=>{dirty();if(event?.type==='input'){penInput(event);if(state.addablePageVisible!==canExtendBundle())updatePageControls();}},overflow=>{if(!overflow){toast('Лист заполнен');return;}const oldPage=state.pageIndex,created=pasteAcrossPages(overflow);if(created>1){state.pageIndex=oldPage+1;editor.innerHTML=sanitizeHTML(state.current.pages[state.pageIndex]);updatePageControls();playSound('paper_store');playSound('paper_draw');editor.focus();const selection=getSelection(),range=document.createRange();range.selectNodeContents(editor);range.collapse(false);selection.removeAllRanges();selection.addRange(range);}},getCurrentInkClass);
   editor.addEventListener('paste',event=>{if(!state.current||!state.folderOpen)return;event.preventDefault();event.stopImmediatePropagation();pasteAcrossPages(event.clipboardData?.getData('text/plain')||'');},{capture:true});
   editor.addEventListener('click',()=>requestAnimationFrame(penTouch));
@@ -273,7 +304,7 @@ function setupEvents() {
   $('#action-menu').onclick = event => { const button = event.target.closest('[data-action]'); if (button) action(button.dataset.action); };
   const moveOptions = $('#move-options');
   for (const [index,comp] of compartments.entries()) { const button = document.createElement('button'); button.type = 'button'; button.textContent = state.labels[comp.id]||`Ящик ${index+1}`; button.dataset.drawer=comp.id; button.onclick = async () => { try { if(!state.current||!hasWrittenPaper(state.current)){toast('В связке пока нет бумаг');return;}if(comp.id!==state.current.compartmentId&&drawerCount(comp.id)>=8){toast('В ящике уже восемь связок или листов');return;}const moved = { ...state.current, compartmentId: comp.id, modifiedAt: new Date().toISOString() }; await putRecord(await encryptDocument(moved)); state.current = moved; const at=state.documents.findIndex(d=>d.id===moved.id);if(at<0)state.documents.push(moved);else state.documents[at]=moved; $('#desk-location').textContent = state.labels[comp.id]||''; state.shelf = comp.id; $('#move-dialog').close(); toast('Бумаги переложены'); } catch(error) { toast(error.message); } }; moveOptions.append(button); }
-  $('#label-dialog').addEventListener('close',async()=>{if($('#label-dialog').returnValue!=='save'||!state.labelTarget)return;const next={...state.labels,[state.labelTarget]:$('#label-input').value.trim()};try{await setMeta('labels',await encryptPrivate(next));state.labels=next;setDrawerLabel(state.labelTarget,next[state.labelTarget]);for(const button of moveOptions.querySelectorAll('button')){const index=compartments.findIndex(c=>c.id===button.dataset.drawer);button.textContent=state.labels[button.dataset.drawer]||`Ящик ${index+1}`;}if(state.shelf===state.labelTarget&&state.view==='shelf')renderShelf();toast('Подпись сохранена');}catch(error){toast(`Не удалось сохранить подпись: ${error.message}`);}});
+$('#label-dialog').addEventListener('close',async()=>{if($('#label-dialog').returnValue!=='save'||!state.labelTarget)return;const next={...state.labels,[state.labelTarget]:$('#label-input').value.trim()};try{await setMeta('labels',await encryptPrivate(next));state.labels=next;setDrawerLabel(state.labelTarget,next[state.labelTarget]||compartments.find(comp=>comp.id===state.labelTarget)?.name||'');for(const button of moveOptions.querySelectorAll('button')){const index=compartments.findIndex(c=>c.id===button.dataset.drawer);button.textContent=state.labels[button.dataset.drawer]||compartments[index].name;}if(state.shelf===state.labelTarget&&state.view==='shelf')renderShelf();toast('Подпись сохранена');}catch(error){toast(`Не удалось сохранить подпись: ${error.message}`);}});
   for (const button of document.querySelectorAll('[data-format]')) { button.addEventListener('mousedown', event => event.preventDefault()); button.onclick = () => format(editor, button.dataset.format, button.dataset.value); }
   $('#undo-button').onclick = () => format(editor, 'undo'); $('#redo-button').onclick = () => format(editor, 'redo');
   $('#find-button').onclick = () => { $('#find-panel').classList.remove('hidden'); $('#find-input').focus(); };

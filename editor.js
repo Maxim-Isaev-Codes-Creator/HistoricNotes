@@ -9,7 +9,7 @@ function cleanNode(node, target) {
   const next = ALLOWED.has(name) ? document.createElement(canonical[name] || name.toLowerCase()) : target;
   if(name==='SPAN'){
     const ink=node.getAttribute('class');
-    if(/^ink-(?:0\d\d|1\d\d|200)$/.test(ink||''))next.className=ink;
+    if(/^ink-(?:red-)?(?:0\d\d|1\d\d|200)$/.test(ink||''))next.className=ink;
   }
   for (const child of node.childNodes) cleanNode(child, next);
   if (next !== target) target.append(next);
@@ -42,7 +42,7 @@ export function setupEditor(element, onChange, onFull = () => {}, inkClass = () 
   element.addEventListener('beforeinput', event => {
     previous=element.innerHTML;caret=caretOffset();
     if(event.inputType!=='insertText'||!event.data||event.isComposing)return;
-    const tone=inkClass();if(!/^ink-(?:0\d\d|1\d\d|200)$/.test(tone))return;
+    const tone=inkClass();if(!/^ink-(?:red-)?(?:0\d\d|1\d\d|200)$/.test(tone))return;
     event.preventDefault();
     const escaped=event.data.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/ /g,'&nbsp;');
     pendingText=event.data;
